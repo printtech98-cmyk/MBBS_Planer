@@ -30,7 +30,20 @@ export async function askAboutNote(
   }
 
   if (!res.ok) {
-    throw new Error(`The AI service returned an error (${res.status}). Please try again.`);
+    let detail = '';
+    try {
+      const errBody = await res.json();
+      if (errBody && typeof errBody === 'object' && typeof (errBody as { error?: unknown }).error === 'string') {
+        detail = (errBody as { error: string }).error;
+      }
+    } catch {
+      try {
+        detail = await res.text();
+      } catch {
+        /* ignore */
+      }
+    }
+    throw new Error(detail || `The AI service returned an error (${res.status}). Please try again.`);
   }
 
   let data: unknown;

@@ -14,8 +14,6 @@ Live app
 
 https://mbbs-study-planner-xxrs.bolt.host
 
-(If this link doesn't load, the app may have been republished under a new URL — check the GitHub repo for the current one.)
-
 Features
 Account system — email/password signup and login, so each student's data is private to them
 Subjects — add, edit, and delete subjects, each with an exam date
@@ -24,7 +22,7 @@ Automatic spaced revision reminders — the moment a topic is marked Completed, 
 Daily Planner — assign topics to specific study dates and check them off as you go
 Revision Reminders page — see every upcoming and overdue spaced-revision reminder across all subjects, grouped by due date
 Progress dashboard — completion percentage per subject, topics completed over time, and a breakdown of not-started/in-progress/completed topics, all as charts
-AI-generated study schedule (see below) — turns a pasted syllabus into a realistic day-by-day study plan, automatically respecting the exam date and reserving the final days for revision only
+AI-generated study schedule — turns a pasted syllabus into a realistic day-by-day study plan, automatically respecting the exam date and reserving the final days for revision only
 Responsive design — usable on both desktop and mobile
 Visible error handling — every database action shows a clear message if something fails, instead of failing silently
 The AI feature
@@ -58,7 +56,6 @@ Google Gemini (gemini-3.6-flash) — the AI model powering the study schedule ge
 Claude (Anthropic) — used throughout the build process to plan the architecture, write the prompts fed into bolt.new, write the AI system prompt above, and debug issues along the way
 Screenshots
 
-
 Show Image Dashboard showing overall progress, due-today reminders, and upcoming exams.
 
 Show Image A subject page with its topics and status tracking.
@@ -67,25 +64,16 @@ Show Image The AI-generated study schedule preview, ready to accept into the pla
 
 Show Image Progress charts showing completion by subject and over time.
 
-How to get clean screenshots: open your live URL (not the bolt.new editor) in a normal browser window, resize/maximize it so the whole page is visible without dev tools or extra browser chrome, then use your OS screenshot tool (Win+Shift+S on Windows) to capture just the browser content area. Save each as a .png into a screenshots/ folder in this repo and commit them — GitHub will render them inline in this README automatically once pushed.
-
 How to run this project locally
 bash
 git clone https://github.com/printtech98-cmyk/MBBS_Planer.git
 cd MBBS_Planer
 npm install
 
-Create a .env file in the project root with your own Supabase project credentials:
 
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+Requires a Supabase project with the subjects, topics, study_plan_entries, and revision_reminders tables (row-level security enabled), email/password authentication, and an Edge Function (generate-schedule) configured with the following secrets:
 
-You'll also need a Supabase project with:
-
-The subjects, topics, study_plan_entries, and revision_reminders tables (with row-level security enabled)
-Email/password authentication enabled (with "Confirm email" turned off for local testing, unless you've set up an email provider)
-An Edge Function (generate-schedule) with the following secrets configured under Project Settings → Edge Functions → Secrets:
-AI_API_KEY — your Gemini API key from aistudio.google.com
+AI_API_KEY — Gemini API key
 AI_API_BASE_URL — https://generativelanguage.googleapis.com/v1beta/openai/
 AI_API_MODEL — gemini-3.6-flash
 
@@ -94,8 +82,4 @@ Then run:
 bash
 npm run dev
 
-The app will be available at http://localhost:5173 (or whatever port Vite reports).
-
-Notes on the build process
-
-This app was built using bolt.new for code generation, with Claude used throughout for planning the data model, writing the prompts given to bolt.new, authoring the AI system prompt, and debugging issues (including a Supabase row-level-security misconfiguration, a stale PostgREST schema cache, and a Gemini model deprecation mid-build, all resolved during development).
+The app will be available at http://localhost:5173.

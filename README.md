@@ -56,7 +56,7 @@ Google Gemini (gemini-3.6-flash) — the AI model powering the study schedule ge
 Claude (Anthropic) — used throughout the build process to plan the architecture, write the prompts fed into bolt.new, write the AI system prompt above, and debug issues along the way
 Screenshots
 
-Show Image Dashboard showing overall progress, due-today reminders, and upcoming exams.
+Show Image (dashboard.png).
 
 Show Image A subject page with its topics and status tracking.
 

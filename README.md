@@ -56,13 +56,18 @@ Google Gemini (gemini-3.6-flash) — the AI model powering the study schedule ge
 Claude (Anthropic) — used throughout the build process to plan the architecture, write the prompts fed into bolt.new, write the AI system prompt above, and debug issues along the way
 Screenshots
 
-Show Image (dashboard.png).
+Dashboard
+<img width="1920" height="1080" alt="dashboard" src="https://github.com/user-attachments/assets/7e9bfe17-1151-431a-bee5-78596990fa8f" />
+Subjects
+<img width="1920" height="1080" alt="subjects" src="https://github.com/user-attachments/assets/f5a5ed83-da3b-46d3-baea-4f249f3db439" />
+Ai schedule
+<img width="1920" height="1080" alt="ai-schedule " src="https://github.com/user-attachments/assets/c4ad4789-f455-40fd-b3f8-67267fb3710b" />
+Progress
+<img width="1920" height="1080" alt="progress" src="https://github.com/user-attachments/assets/982ea375-333a-4ee3-8601-21f8cc69c155" />
 
-Show Image A subject page with its topics and status tracking.
 
-Show Image The AI-generated study schedule preview, ready to accept into the planner.
 
-Show Image Progress charts showing completion by subject and over time.
+
 
 How to run this project locally
 bash
@@ -73,7 +78,6 @@ npm install
 
 Requires a Supabase project with the subjects, topics, study_plan_entries, and revision_reminders tables (row-level security enabled), email/password authentication, and an Edge Function (generate-schedule) configured with the following secrets:
 
-AI_API_KEY — Gemini API key
 AI_API_BASE_URL — https://generativelanguage.googleapis.com/v1beta/openai/
 AI_API_MODEL — gemini-3.6-flash
 

@@ -50,15 +50,4 @@ export interface RevisionReminderWithTopic extends RevisionReminder {
   };
 }
 
-export interface Note {
-  id: string;
-  title: string;
-  content: string;
-  subject_id: string | null;
-  created_at: string;
-  subjects?: { name: string } | null;
-}
 
-export interface NoteWithSubject extends Note {
-  subject_name: string | null;
-}

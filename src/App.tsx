@@ -5,7 +5,6 @@ import SubjectsPage from '@/pages/Subjects';
 import PlannerPage from '@/pages/Planner';
 import RemindersPage from '@/pages/Reminders';
 import ProgressPage from '@/pages/Progress';
-import NotesPage from '@/pages/Notes';
 import AuthScreen from '@/pages/AuthScreen';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { getSubjects } from '@/lib/db';
@@ -57,7 +56,6 @@ function AppInner() {
       {page === 'planner' && <PlannerPage />}
       {page === 'reminders' && <RemindersPage />}
       {page === 'progress' && <ProgressPage />}
-      {page === 'notes' && <NotesPage />}
     </AppLayout>
   );
 }

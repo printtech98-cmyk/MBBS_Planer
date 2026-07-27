@@ -8,13 +8,12 @@ import {
   Activity,
   Menu,
   X,
-  NotebookPen,
   LogOut,
   Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
-export type Page = 'dashboard' | 'subjects' | 'planner' | 'progress' | 'reminders' | 'notes';
+export type Page = 'dashboard' | 'subjects' | 'planner' | 'progress' | 'reminders';
 
 interface LayoutProps {
   current: Page;
@@ -30,7 +29,6 @@ const NAV: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'planner', label: 'Planner', icon: CalendarDays },
   { id: 'reminders', label: 'Reminders', icon: Bell },
   { id: 'progress', label: 'Progress', icon: BarChart3 },
-  { id: 'notes', label: 'Notes', icon: NotebookPen },
 ];
 
 export default function AppLayout({ current, onNavigate, onboarding, onDismissOnboarding, children }: LayoutProps) {

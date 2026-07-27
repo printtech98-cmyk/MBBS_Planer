@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Subject, Topic, StudyPlanEntry, RevisionReminder, Note, NoteWithSubject } from '@/lib/types';
+import type { Subject, Topic, StudyPlanEntry, RevisionReminder } from '@/lib/types';
 
 function nowISO(): string {
   return new Date().toISOString();
@@ -39,9 +39,6 @@ export async function updateSubject(id: string, patch: Partial<Pick<Subject, 'na
 }
 
 export async function deleteSubject(id: string): Promise<void> {
-  // Delete notes linked to this subject (no FK), then the subject cascades topics/plans/reminders.
-  const { error: noteErr } = await supabase.from('notes').delete().eq('subject_id', id);
-  if (noteErr) throw new Error(errMsg(noteErr, 'Failed to delete linked notes.'));
   const { error } = await supabase.from('subjects').delete().eq('id', id);
   if (error) throw new Error(errMsg(error, 'Failed to delete subject.'));
 }
@@ -156,44 +153,6 @@ export async function addReminders(items: { topic_id: string; due_date: string }
 export async function completeReminder(id: string): Promise<void> {
   const { error } = await supabase.from('revision_reminders').update({ completed: true }).eq('id', id);
   if (error) throw new Error(errMsg(error, 'Failed to complete reminder.'));
-}
-
-// ---------- Notes ----------
-
-export async function getNotes(): Promise<NoteWithSubject[]> {
-  const { data, error } = await supabase
-    .from('notes')
-    .select('*, subjects(name)')
-    .order('created_at', { ascending: false });
-  if (error) throw new Error(errMsg(error, 'Failed to load notes.'));
-  const rows = (data ?? []) as Note[];
-  return rows.map((n) => ({
-    ...n,
-    subject_name: n.subjects?.name ?? null,
-  }));
-}
-
-export async function saveNote(input: {
-  title: string;
-  content: string;
-  subject_id: string | null;
-}): Promise<Note> {
-  const { data, error } = await supabase
-    .from('notes')
-    .insert({
-      title: input.title,
-      content: input.content,
-      subject_id: input.subject_id,
-    })
-    .select()
-    .single();
-  if (error) throw new Error(errMsg(error, 'Failed to save note.'));
-  return data as Note;
-}
-
-export async function deleteNote(id: string): Promise<void> {
-  const { error } = await supabase.from('notes').delete().eq('id', id);
-  if (error) throw new Error(errMsg(error, 'Failed to delete note.'));
 }
 
 export { nowISO };

@@ -3,6 +3,8 @@ import { getSubjects, getTopics } from '@/lib/db';
 import type { Subject, Topic } from '@/lib/types';
 import { getNotes, saveNote, deleteNote, type LocalNote } from '@/lib/notesStorage';
 import { askAboutNote, type ChatTurn } from '@/lib/askNotes';
+import { summarizeImage } from '@/lib/summarizeImage';
+import { usePdfRenderer } from '@/lib/usePdfRenderer';
 import { Card, PageHeader, EmptyState, ErrorBanner, ConfirmDialog } from '@/components/ui';
 import {
   NotebookPen,
@@ -14,6 +16,9 @@ import {
   BookOpen,
   User,
   Sparkles,
+  Upload,
+  FileText,
+  Wand2,
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -38,6 +43,16 @@ export default function NotesPage() {
   const [subjectId, setSubjectId] = useState<string>('');
   const [topicId, setTopicId] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [inputMode, setInputMode] = useState<'type' | 'upload'>('type');
+  const [file, setFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageMime, setImageMime] = useState<string>('image/png');
+  const [summarizing, setSummarizing] = useState(false);
+  const [summarizeError, setSummarizeError] = useState<string | null>(null);
+  const pdf = usePdfRenderer();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<LocalNote | null>(null);
 
@@ -85,7 +100,81 @@ export default function NotesPage() {
     setSubjectId('');
     setTopicId('');
     setFormError(null);
+    setInputMode('type');
+    setFile(null);
+    setImagePreview(null);
+    setImageBase64(null);
+    setSummarizeError(null);
     setShowForm(true);
+  };
+
+  const resetUploadState = () => {
+    setFile(null);
+    setImagePreview(null);
+    setImageBase64(null);
+    setSummarizeError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setSummarizeError(null);
+    setContent('');
+    const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (!validTypes.includes(f.type)) {
+      setSummarizeError('Unsupported file type. Please upload a PDF, PNG, or JPG.');
+      setFile(null);
+      setImagePreview(null);
+      setImageBase64(null);
+      return;
+    }
+    setFile(f);
+    if (f.type === 'application/pdf') {
+      setImagePreview(null);
+      setImageBase64(null);
+      await pdf.loadPdf(f);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        setImagePreview(result);
+        const base64 = result.split(',')[1] ?? '';
+        setImageBase64(base64);
+        setImageMime(f.type);
+      };
+      reader.onerror = () => setSummarizeError('Failed to read the image file.');
+      reader.readAsDataURL(f);
+    }
+  };
+
+  const handleSummarize = async () => {
+    let base64 = imageBase64;
+    let mime = imageMime;
+    if (file?.type === 'application/pdf' && pdf.pageImage) {
+      base64 = pdf.pageImage.base64;
+      mime = 'image/png';
+    }
+    if (!base64) {
+      setSummarizeError('Please upload a file and ensure it loads before summarizing.');
+      return;
+    }
+    setSummarizing(true);
+    setSummarizeError(null);
+    try {
+      const summary = await summarizeImage(base64, mime);
+      setContent(summary);
+    } catch (err) {
+      setSummarizeError(err instanceof Error ? err.message : 'Failed to generate summary. Please try again.');
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
+  const switchInputMode = (mode: 'type' | 'upload') => {
+    setInputMode(mode);
+    resetUploadState();
+    if (mode === 'type') setContent('');
   };
 
   const handleSave = (e: FormEvent) => {
@@ -109,6 +198,7 @@ export default function NotesPage() {
     setActiveNote(note);
     setChat([]);
     setChatError(null);
+    resetUploadState();
   };
 
   const handleDelete = () => {
@@ -168,7 +258,7 @@ export default function NotesPage() {
           <ChevronLeft className="w-4 h-4" /> Back to notes
         </button>
 
-        <PageHeader title="Add a note" subtitle="Write or paste your lecture notes, then ask questions about them." />
+        <PageHeader title="Add a note" subtitle="Type your notes or upload a file to get an AI-generated summary." />
 
         {formError && <ErrorBanner message={formError} onDismiss={() => setFormError(null)} />}
 
@@ -232,13 +322,137 @@ export default function NotesPage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Content</label>
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Paste your lecture notes here..."
-                rows={12}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-800 text-sm resize-y leading-relaxed"
-              />
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => switchInputMode('type')}
+                  className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition ${
+                    inputMode === 'type'
+                      ? 'bg-sky-500 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" /> Type content
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchInputMode('upload')}
+                  className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition ${
+                    inputMode === 'upload'
+                      ? 'bg-sky-500 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <Upload className="w-4 h-4" /> Upload file
+                </button>
+              </div>
+
+              {inputMode === 'type' ? (
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Paste your lecture notes here..."
+                  rows={12}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-800 text-sm resize-y leading-relaxed"
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={handleFileChange}
+                      className="text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 cursor-pointer"
+                    />
+                    {file && (
+                      <button
+                        type="button"
+                        onClick={resetUploadState}
+                        className="text-sm text-slate-400 hover:text-rose-500"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {file?.type === 'application/pdf' && (
+                    <div className="space-y-3">
+                      {pdf.loading && (
+                        <div className="flex items-center gap-2 text-sm text-slate-400">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Loading PDF...
+                        </div>
+                      )}
+                      {pdf.error && <ErrorBanner message={pdf.error} />}
+                      {pdf.pageCount > 0 && !pdf.loading && (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <span>{pdf.pageCount} page{pdf.pageCount > 1 ? 's' : ''}</span>
+                          <span className="text-slate-300">|</span>
+                          <label className="flex items-center gap-1.5">
+                            Page
+                            <input
+                              type="number"
+                              min={1}
+                              max={pdf.pageCount}
+                              value={pdf.currentPage}
+                              onChange={(e) => pdf.changePage(Math.max(1, Math.min(pdf.pageCount, Number(e.target.value))))}
+                              className="w-16 px-2 py-1 rounded-lg border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-800 text-sm"
+                            />
+                          </label>
+                        </div>
+                      )}
+                      {pdf.pageImage && (
+                        <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50 p-2">
+                          <img
+                            src={`data:image/png;base64,${pdf.pageImage.base64}`}
+                            alt={`PDF page ${pdf.currentPage}`}
+                            className="max-w-full mx-auto rounded-lg shadow-sm"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {file && file.type !== 'application/pdf' && imagePreview && (
+                    <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50 p-2">
+                      <img src={imagePreview} alt="Uploaded preview" className="max-w-full mx-auto rounded-lg shadow-sm" />
+                    </div>
+                  )}
+
+                  {summarizeError && <ErrorBanner message={summarizeError} onDismiss={() => setSummarizeError(null)} />}
+
+                  {file && !summarizing && (
+                    <button
+                      type="button"
+                      onClick={handleSummarize}
+                      disabled={!imageBase64 && !pdf.pageImage}
+                      className="px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-sky-500 hover:from-indigo-600 hover:to-sky-600 shadow-md shadow-indigo-200 flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Wand2 className="w-4 h-4" /> Summarize with AI
+                    </button>
+                  )}
+
+                  {summarizing && (
+                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Generating summary...
+                    </div>
+                  )}
+
+                  {content && inputMode === 'upload' && (
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 mb-1.5">
+                        AI summary (editable)
+                      </p>
+                      <textarea
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        rows={10}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-800 text-sm resize-y leading-relaxed"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-1">

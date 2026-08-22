@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { getSubjects } from '@/lib/db';
-import type { Subject } from '@/lib/types';
+import { getSubjects, getTopics } from '@/lib/db';
+import type { Subject, Topic } from '@/lib/types';
 import { getNotes, saveNote, deleteNote, type LocalNote } from '@/lib/notesStorage';
 import { askAboutNote, type ChatTurn } from '@/lib/askNotes';
 import { Card, PageHeader, EmptyState, ErrorBanner, ConfirmDialog } from '@/components/ui';
@@ -23,17 +23,20 @@ interface ChatMessage {
 
 export default function NotesPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [subjectsError, setSubjectsError] = useState<string | null>(null);
 
   const [notes, setNotes] = useState<LocalNote[]>([]);
   const [activeNote, setActiveNote] = useState<LocalNote | null>(null);
   const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterTopic, setFilterTopic] = useState<string>('all');
 
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [subjectId, setSubjectId] = useState<string>('');
+  const [topicId, setTopicId] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<LocalNote | null>(null);
@@ -47,8 +50,9 @@ export default function NotesPage() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await getSubjects();
-        setSubjects(data);
+        const [subjData, topicData] = await Promise.all([getSubjects(), getTopics()]);
+        setSubjects(subjData);
+        setTopics(topicData);
       } catch (err) {
         setSubjectsError(err instanceof Error ? err.message : 'Failed to load subjects.');
       } finally {
@@ -63,14 +67,23 @@ export default function NotesPage() {
   }, [chat, asking]);
 
   const filteredNotes = useMemo(() => {
-    if (filterSubject === 'all') return notes;
-    return notes.filter((n) => n.subject_id === filterSubject);
-  }, [notes, filterSubject]);
+    return notes.filter((n) => {
+      if (filterSubject !== 'all' && n.subject_id !== filterSubject) return false;
+      if (filterTopic !== 'all' && n.topic_id !== filterTopic) return false;
+      return true;
+    });
+  }, [notes, filterSubject, filterTopic]);
+
+  const formTopics = useMemo(() => {
+    if (!subjectId) return topics;
+    return topics.filter((t) => t.subject_id === subjectId);
+  }, [topics, subjectId]);
 
   const openForm = () => {
     setTitle('');
     setContent('');
     setSubjectId('');
+    setTopicId('');
     setFormError(null);
     setShowForm(true);
   };
@@ -82,11 +95,14 @@ export default function NotesPage() {
       return;
     }
     const subj = subjects.find((s) => s.id === subjectId) ?? null;
+    const topic = topics.find((t) => t.id === topicId) ?? null;
     const note = saveNote({
       title: title.trim(),
       content,
       subject_id: subj ? subj.id : null,
       subject_name: subj ? subj.name : null,
+      topic_id: topic ? topic.id : null,
+      topic_name: topic ? topic.name : null,
     });
     setNotes(getNotes());
     setShowForm(false);
@@ -111,6 +127,14 @@ export default function NotesPage() {
     setChat([]);
     setChatError(null);
     setQuestion('');
+  };
+
+  const handleSubjectChange = (id: string) => {
+    setSubjectId(id);
+    if (topicId) {
+      const stillValid = id ? topics.some((t) => t.id === topicId && t.subject_id === id) : true;
+      if (!stillValid) setTopicId('');
+    }
   };
 
   const handleAsk = async (e: FormEvent) => {
@@ -168,7 +192,7 @@ export default function NotesPage() {
               </label>
               <select
                 value={subjectId}
-                onChange={(e) => setSubjectId(e.target.value)}
+                onChange={(e) => handleSubjectChange(e.target.value)}
                 disabled={subjectsLoading}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-800 text-sm bg-white"
               >
@@ -181,6 +205,28 @@ export default function NotesPage() {
               </select>
               {subjectsError && (
                 <p className="text-xs text-rose-500 mt-1">Could not load subjects: {subjectsError}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Link to topic <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <select
+                value={topicId}
+                onChange={(e) => setTopicId(e.target.value)}
+                disabled={subjectsLoading || formTopics.length === 0}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-800 text-sm bg-white disabled:opacity-60"
+              >
+                <option value="">No topic</option>
+                {formTopics.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              {subjectId && formTopics.length === 0 && (
+                <p className="text-xs text-slate-400 mt-1">No topics under this subject yet.</p>
               )}
             </div>
 
@@ -371,12 +417,15 @@ export default function NotesPage() {
         </Card>
       ) : (
         <>
-          {notes.filter((n) => n.subject_id).length > 0 && (
-            <div className="flex items-center gap-2 mb-4">
+          {notes.filter((n) => n.subject_id || n.topic_id).length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
               <BookOpen className="w-4 h-4 text-slate-400" />
               <select
                 value={filterSubject}
-                onChange={(e) => setFilterSubject(e.target.value)}
+                onChange={(e) => {
+                  setFilterSubject(e.target.value);
+                  setFilterTopic('all');
+                }}
                 className="px-3 py-2 rounded-lg border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-700 text-sm bg-white"
               >
                 <option value="all">All subjects</option>
@@ -385,6 +434,21 @@ export default function NotesPage() {
                   .map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
+                    </option>
+                  ))}
+              </select>
+              <select
+                value={filterTopic}
+                onChange={(e) => setFilterTopic(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-700 text-sm bg-white"
+              >
+                <option value="all">All topics</option>
+                {topics
+                  .filter((t) => notes.some((n) => n.topic_id === t.id))
+                  .filter((t) => filterSubject === 'all' || t.subject_id === filterSubject)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
                     </option>
                   ))}
               </select>
@@ -412,11 +476,18 @@ export default function NotesPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                {note.subject_name && (
-                  <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-sky-50 text-sky-600 mb-2">
-                    {note.subject_name}
-                  </span>
-                )}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {note.subject_name && (
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-sky-50 text-sky-600">
+                      {note.subject_name}
+                    </span>
+                  )}
+                  {note.topic_name && (
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-teal-50 text-teal-600">
+                      {note.topic_name}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-slate-500 line-clamp-3 leading-relaxed">
                   {note.content || '(empty note)'}
                 </p>
@@ -426,7 +497,7 @@ export default function NotesPage() {
 
           {filteredNotes.length === 0 && (
             <Card className="p-6 mt-4">
-              <EmptyState icon={BookOpen} title="No notes for this subject" hint="Try a different subject filter." />
+              <EmptyState icon={BookOpen} title="No notes match this filter" hint="Try a different subject or topic filter." />
             </Card>
           )}
         </>

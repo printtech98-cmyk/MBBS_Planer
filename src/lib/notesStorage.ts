@@ -4,6 +4,8 @@ export interface LocalNote {
   content: string;
   subject_id: string | null;
   subject_name: string | null;
+  topic_id: string | null;
+  topic_name: string | null;
   created_at: string;
 }
 
@@ -33,6 +35,8 @@ export function saveNote(input: {
   content: string;
   subject_id: string | null;
   subject_name: string | null;
+  topic_id: string | null;
+  topic_name: string | null;
 }): LocalNote {
   const note: LocalNote = {
     id: crypto.randomUUID(),
@@ -40,6 +44,8 @@ export function saveNote(input: {
     content: input.content,
     subject_id: input.subject_id,
     subject_name: input.subject_name,
+    topic_id: input.topic_id,
+    topic_name: input.topic_name,
     created_at: new Date().toISOString(),
   };
   const notes = read();

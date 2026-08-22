@@ -54,6 +54,33 @@ export function saveNote(input: {
   return note;
 }
 
+export function updateNote(
+  id: string,
+  patch: {
+    title: string;
+    content: string;
+    subject_id: string | null;
+    subject_name: string | null;
+    topic_id: string | null;
+    topic_name: string | null;
+  },
+): LocalNote | null {
+  const notes = read();
+  const idx = notes.findIndex((n) => n.id === id);
+  if (idx === -1) return null;
+  notes[idx] = {
+    ...notes[idx],
+    title: patch.title.trim(),
+    content: patch.content,
+    subject_id: patch.subject_id,
+    subject_name: patch.subject_name,
+    topic_id: patch.topic_id,
+    topic_name: patch.topic_name,
+  };
+  write(notes);
+  return notes[idx];
+}
+
 export function deleteNote(id: string): void {
   write(read().filter((n) => n.id !== id));
 }

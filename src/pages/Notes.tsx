@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { getSubjects, getTopics } from '@/lib/db';
 import type { Subject, Topic } from '@/lib/types';
-import { getNotes, saveNote, deleteNote, type LocalNote } from '@/lib/notesStorage';
+import { getNotes, saveNote, updateNote, deleteNote, type LocalNote } from '@/lib/notesStorage';
 import { askAboutNote, type ChatTurn } from '@/lib/askNotes';
 import { summarizeImage } from '@/lib/summarizeImage';
 import { usePdfRenderer } from '@/lib/usePdfRenderer';
@@ -10,6 +10,7 @@ import {
   NotebookPen,
   Plus,
   Trash2,
+  Pencil,
   ChevronLeft,
   Send,
   Loader2,
@@ -19,6 +20,7 @@ import {
   Upload,
   FileText,
   Wand2,
+  Check,
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -38,6 +40,8 @@ export default function NotesPage() {
   const [filterTopic, setFilterTopic] = useState<string>('all');
 
   const [showForm, setShowForm] = useState(false);
+  const [editingNote, setEditingNote] = useState<LocalNote | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [subjectId, setSubjectId] = useState<string>('');
@@ -95,6 +99,7 @@ export default function NotesPage() {
   }, [topics, subjectId]);
 
   const openForm = () => {
+    setEditingNote(null);
     setTitle('');
     setContent('');
     setSubjectId('');
@@ -106,6 +111,26 @@ export default function NotesPage() {
     setImageBase64(null);
     setSummarizeError(null);
     setShowForm(true);
+  };
+
+  const openEditForm = (note: LocalNote) => {
+    setEditingNote(note);
+    setTitle(note.title);
+    setContent(note.content);
+    setSubjectId(note.subject_id ?? '');
+    setTopicId(note.topic_id ?? '');
+    setFormError(null);
+    setInputMode('type');
+    setFile(null);
+    setImagePreview(null);
+    setImageBase64(null);
+    setSummarizeError(null);
+    setShowForm(true);
+  };
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
   };
 
   const resetUploadState = () => {
@@ -185,20 +210,37 @@ export default function NotesPage() {
     }
     const subj = subjects.find((s) => s.id === subjectId) ?? null;
     const topic = topics.find((t) => t.id === topicId) ?? null;
-    const note = saveNote({
+    const payload = {
       title: title.trim(),
       content,
       subject_id: subj ? subj.id : null,
       subject_name: subj ? subj.name : null,
       topic_id: topic ? topic.id : null,
       topic_name: topic ? topic.name : null,
-    });
-    setNotes(getNotes());
-    setShowForm(false);
-    setActiveNote(note);
-    setChat([]);
-    setChatError(null);
-    resetUploadState();
+    };
+    if (editingNote) {
+      const updated = updateNote(editingNote.id, payload);
+      if (!updated) {
+        setFormError('Could not find the note to update. It may have been deleted.');
+        return;
+      }
+      setNotes(getNotes());
+      setShowForm(false);
+      setEditingNote(null);
+      setActiveNote(updated);
+      setChat([]);
+      setChatError(null);
+      resetUploadState();
+      showToast('Note updated successfully');
+    } else {
+      const note = saveNote(payload);
+      setNotes(getNotes());
+      setShowForm(false);
+      setActiveNote(note);
+      setChat([]);
+      setChatError(null);
+      resetUploadState();
+    }
   };
 
   const handleDelete = () => {
@@ -258,7 +300,7 @@ export default function NotesPage() {
           <ChevronLeft className="w-4 h-4" /> Back to notes
         </button>
 
-        <PageHeader title="Add a note" subtitle="Type your notes or upload a file to get an AI-generated summary." />
+        <PageHeader title={editingNote ? 'Edit note' : 'Add a note'} subtitle={editingNote ? 'Update your note content, title, or links.' : 'Type your notes or upload a file to get an AI-generated summary.'} />
 
         {formError && <ErrorBanner message={formError} onDismiss={() => setFormError(null)} />}
 
@@ -460,7 +502,8 @@ export default function NotesPage() {
                 type="submit"
                 className="px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-600 hover:to-teal-600 shadow-md shadow-sky-200 flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" /> Save note
+                {editingNote ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                {editingNote ? 'Save changes' : 'Save note'}
               </button>
               <button
                 type="button"
@@ -496,13 +539,22 @@ export default function NotesPage() {
               </span>
             )}
           </div>
-          <button
-            onClick={() => setConfirmDelete(activeNote)}
-            className="flex-shrink-0 p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition"
-            title="Delete note"
-          >
-            <Trash2 className="w-4.5 h-4.5" />
-          </button>
+          <div className="flex flex-shrink-0 gap-1">
+            <button
+              onClick={() => openEditForm(activeNote)}
+              className="p-2 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition"
+              title="Edit note"
+            >
+              <Pencil className="w-4.5 h-4.5" />
+            </button>
+            <button
+              onClick={() => setConfirmDelete(activeNote)}
+              className="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition"
+              title="Delete note"
+            >
+              <Trash2 className="w-4.5 h-4.5" />
+            </button>
+          </div>
         </div>
 
         <Card className="p-5 mb-6">
@@ -680,15 +732,28 @@ export default function NotesPage() {
                   <h3 className="font-semibold text-slate-800 group-hover:text-sky-700 transition line-clamp-2">
                     {note.title}
                   </h3>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDelete(note);
-                    }}
-                    className="flex-shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex flex-shrink-0 gap-0.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditForm(note);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-300 hover:text-sky-500 hover:bg-sky-50 transition"
+                      title="Edit note"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDelete(note);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition"
+                      title="Delete note"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {note.subject_name && (
@@ -724,6 +789,12 @@ export default function NotesPage() {
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[70] flex items-center gap-2 px-4 py-3 rounded-xl bg-teal-600 text-white shadow-lg text-sm font-medium animate-in fade-in slide-in-from-bottom-2">
+          <Check className="w-4 h-4" /> {toast}
+        </div>
+      )}
     </div>
   );
 }

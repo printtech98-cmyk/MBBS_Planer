@@ -5,6 +5,7 @@ import { getNotes, saveNote, updateNote, deleteNote, type LocalNote } from '@/li
 import { askAboutNote, type ChatTurn } from '@/lib/askNotes';
 import { summarizeImage } from '@/lib/summarizeImage';
 import { usePdfRenderer } from '@/lib/usePdfRenderer';
+import { saveAttachment, getAttachment, deleteAttachment, base64ToBlob, type NoteAttachment } from '@/lib/noteAttachments';
 import { Card, PageHeader, EmptyState, ErrorBanner, ConfirmDialog } from '@/components/ui';
 import {
   NotebookPen,
@@ -21,6 +22,7 @@ import {
   FileText,
   Wand2,
   Check,
+  Paperclip,
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -55,6 +57,10 @@ export default function NotesPage() {
   const [imageMime, setImageMime] = useState<string>('image/png');
   const [summarizing, setSummarizing] = useState(false);
   const [summarizeError, setSummarizeError] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<NoteAttachment | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [attachmentLoading, setAttachmentLoading] = useState(false);
   const pdf = usePdfRenderer();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,6 +144,7 @@ export default function NotesPage() {
     setImagePreview(null);
     setImageBase64(null);
     setSummarizeError(null);
+    setPendingAttachment(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -159,6 +166,13 @@ export default function NotesPage() {
       setImagePreview(null);
       setImageBase64(null);
       await pdf.loadPdf(f);
+      setPendingAttachment({
+        fileBlob: f,
+        fileName: f.name,
+        mimeType: f.type,
+        fileType: 'pdf',
+        pageNumber: 1,
+      });
     } else {
       const reader = new FileReader();
       reader.onload = () => {
@@ -167,6 +181,13 @@ export default function NotesPage() {
         const base64 = result.split(',')[1] ?? '';
         setImageBase64(base64);
         setImageMime(f.type);
+        setPendingAttachment({
+          fileBlob: f,
+          fileName: f.name,
+          mimeType: f.type,
+          fileType: 'image',
+          pageImageBlob: base64ToBlob(base64, f.type),
+        });
       };
       reader.onerror = () => setSummarizeError('Failed to read the image file.');
       reader.readAsDataURL(f);
@@ -179,6 +200,11 @@ export default function NotesPage() {
     if (file?.type === 'application/pdf' && pdf.pageImage) {
       base64 = pdf.pageImage.base64;
       mime = 'image/png';
+      setPendingAttachment((prev) =>
+        prev && pdf.pageImage
+          ? { ...prev, pageNumber: pdf.currentPage, pageImageBlob: base64ToBlob(pdf.pageImage.base64, 'image/png') }
+          : prev,
+      );
     }
     if (!base64) {
       setSummarizeError('Please upload a file and ensure it loads before summarizing.');
@@ -202,7 +228,7 @@ export default function NotesPage() {
     if (mode === 'type') setContent('');
   };
 
-  const handleSave = (e: FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setFormError('Please enter a title.');
@@ -233,7 +259,16 @@ export default function NotesPage() {
       resetUploadState();
       showToast('Note updated successfully');
     } else {
-      const note = saveNote(payload);
+      const note = saveNote({ ...payload, has_attachment: !!pendingAttachment });
+      if (pendingAttachment) {
+        try {
+          await saveAttachment(note.id, pendingAttachment);
+        } catch {
+          setAttachmentError('Could not store the attached file (storage may be full). The note was saved with the generated text only.');
+          const noteWithoutAttachment = updateNote(note.id, { ...payload, has_attachment: false });
+          if (noteWithoutAttachment) note.has_attachment = false;
+        }
+      }
       setNotes(getNotes());
       setShowForm(false);
       setActiveNote(note);
@@ -246,19 +281,36 @@ export default function NotesPage() {
   const handleDelete = () => {
     if (!confirmDelete) return;
     deleteNote(confirmDelete.id);
+    void deleteAttachment(confirmDelete.id);
     setNotes(getNotes());
     if (activeNote?.id === confirmDelete.id) {
       setActiveNote(null);
+      setAttachmentUrl(null);
       setChat([]);
     }
     setConfirmDelete(null);
   };
 
-  const selectNote = (note: LocalNote) => {
+  const selectNote = async (note: LocalNote) => {
     setActiveNote(note);
     setChat([]);
     setChatError(null);
     setQuestion('');
+    setAttachmentUrl(null);
+    if (note.has_attachment) {
+      setAttachmentLoading(true);
+      try {
+        const att = await getAttachment(note.id);
+        if (att) {
+          const blob = att.pageImageBlob ?? att.fileBlob;
+          setAttachmentUrl(URL.createObjectURL(blob));
+        }
+      } catch {
+        // best-effort
+      } finally {
+        setAttachmentLoading(false);
+      }
+    }
   };
 
   const handleSubjectChange = (id: string) => {
@@ -303,6 +355,7 @@ export default function NotesPage() {
         <PageHeader title={editingNote ? 'Edit note' : 'Add a note'} subtitle={editingNote ? 'Update your note content, title, or links.' : 'Type your notes or upload a file to get an AI-generated summary.'} />
 
         {formError && <ErrorBanner message={formError} onDismiss={() => setFormError(null)} />}
+        {attachmentError && <ErrorBanner message={attachmentError} onDismiss={() => setAttachmentError(null)} />}
 
         <Card className="p-5 sm:p-6">
           <form onSubmit={handleSave} className="space-y-4">
@@ -557,6 +610,26 @@ export default function NotesPage() {
           </div>
         </div>
 
+        {activeNote.has_attachment && (
+          <Card className="p-5 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Paperclip className="w-4 h-4 text-slate-400" />
+              <h2 className="font-semibold text-slate-800 text-sm">Original page</h2>
+            </div>
+            {attachmentLoading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading attachment...
+              </div>
+            ) : attachmentUrl ? (
+              <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50 p-2">
+                <img src={attachmentUrl} alt="Original page" className="max-w-full mx-auto rounded-lg shadow-sm" />
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">The attached file could not be loaded.</p>
+            )}
+          </Card>
+        )}
+
         <Card className="p-5 mb-6">
           <pre className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed font-sans">
             {activeNote.content || '(empty note)'}
@@ -764,6 +837,11 @@ export default function NotesPage() {
                   {note.topic_name && (
                     <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-teal-50 text-teal-600">
                       {note.topic_name}
+                    </span>
+                  )}
+                  {note.has_attachment && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-600">
+                      <Paperclip className="w-3 h-3" /> File
                     </span>
                   )}
                 </div>

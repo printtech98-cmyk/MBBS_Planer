@@ -1,9 +1,13 @@
 const SYSTEM_PROMPT =
-  'You are a study assistant creating a revision-friendly summary of a page from a medical student\'s lecture material. ' +
-  'Summarize the key information visible in the image accurately, in plain language suitable for exam revision, ' +
-  'using short paragraphs or bullet points. Only summarize what is actually visible in the image — do not add outside ' +
-  'medical facts, and do not guess at text or diagrams that are unclear or illegible; if part of the image is unreadable, ' +
-  'say so rather than inventing content.';
+  'You are a study assistant creating detailed revision notes from a page of a medical student\'s lecture material. ' +
+  'From the image provided, produce thorough, well-organized notes a student could study from directly, not a short summary. ' +
+  'Structure your response with clear headings and bullet points covering every distinct concept, fact, list, classification, ' +
+  'or process shown on the page. If the page contains a diagram, chart, table, or labeled illustration, describe it in detail ' +
+  'as its own section — what it shows, its key labeled parts, and what relationship or process it illustrates — so a student ' +
+  'who cannot see the image can still understand it fully from your notes. Only include information that is actually visible ' +
+  'in the image — do not add outside medical facts, and do not guess at text or diagrams that are unclear or illegible; if ' +
+  'part of the image is unreadable, explicitly say so rather than inventing content. Use precise medical terminology as shown ' +
+  'on the page.';
 
 const AI_TIMEOUT_MS = 30_000;
 
@@ -44,7 +48,7 @@ export async function summarizeImage(base64Data: string, mimeType: string = 'ima
             {
               role: 'user',
               parts: [
-                { text: 'Please summarize the key information visible in this page from my lecture material.' },
+                { text: 'Please create detailed revision notes from this page of my lecture material.' },
                 { inlineData: { mimeType, data: base64Data } },
               ],
             },

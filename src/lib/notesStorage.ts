@@ -6,6 +6,7 @@ export interface LocalNote {
   subject_name: string | null;
   topic_id: string | null;
   topic_name: string | null;
+  has_attachment: boolean;
   created_at: string;
 }
 
@@ -37,6 +38,7 @@ export function saveNote(input: {
   subject_name: string | null;
   topic_id: string | null;
   topic_name: string | null;
+  has_attachment?: boolean;
 }): LocalNote {
   const note: LocalNote = {
     id: crypto.randomUUID(),
@@ -46,6 +48,7 @@ export function saveNote(input: {
     subject_name: input.subject_name,
     topic_id: input.topic_id,
     topic_name: input.topic_name,
+    has_attachment: input.has_attachment ?? false,
     created_at: new Date().toISOString(),
   };
   const notes = read();
@@ -63,6 +66,7 @@ export function updateNote(
     subject_name: string | null;
     topic_id: string | null;
     topic_name: string | null;
+    has_attachment?: boolean;
   },
 ): LocalNote | null {
   const notes = read();
@@ -76,6 +80,7 @@ export function updateNote(
     subject_name: patch.subject_name,
     topic_id: patch.topic_id,
     topic_name: patch.topic_name,
+    ...(patch.has_attachment !== undefined ? { has_attachment: patch.has_attachment } : {}),
   };
   write(notes);
   return notes[idx];

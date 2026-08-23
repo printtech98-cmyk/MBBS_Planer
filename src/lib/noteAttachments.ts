@@ -26,22 +26,31 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 export async function saveAttachment(noteId: string, attachment: NoteAttachment): Promise<void> {
+  console.log('[Attachment] Saving attachment for note:', noteId, {
+    fileName: attachment.fileName,
+    fileType: attachment.fileType,
+    fileBlobSize: attachment.fileBlob.size,
+    pageImageBlobSize: attachment.pageImageBlob?.size,
+  });
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).put(attachment, noteId);
     tx.oncomplete = () => {
       db.close();
+      console.log('[Attachment] Save completed for note:', noteId);
       resolve();
     };
     tx.onerror = () => {
       db.close();
+      console.error('[Attachment] Save failed for note:', noteId, tx.error);
       reject(tx.error);
     };
   });
 }
 
 export async function getAttachment(noteId: string): Promise<NoteAttachment | null> {
+  console.log('[Attachment] Looking up attachment for note:', noteId);
   try {
     const db = await openDb();
     return await new Promise((resolve, reject) => {
@@ -49,14 +58,23 @@ export async function getAttachment(noteId: string): Promise<NoteAttachment | nu
       const req = tx.objectStore(STORE).get(noteId);
       req.onsuccess = () => {
         db.close();
-        resolve(req.result ?? null);
+        const result = req.result ?? null;
+        console.log('[Attachment] Lookup result for note:', noteId, result ? 'found' : 'not found', result ? {
+          fileName: result.fileName,
+          fileType: result.fileType,
+          fileBlobSize: result.fileBlob.size,
+          pageImageBlobSize: result.pageImageBlob?.size,
+        } : null);
+        resolve(result);
       };
       req.onerror = () => {
         db.close();
+        console.error('[Attachment] Lookup error for note:', noteId, req.error);
         reject(req.error);
       };
     });
-  } catch {
+  } catch (err) {
+    console.error('[Attachment] Lookup exception for note:', noteId, err);
     return null;
   }
 }

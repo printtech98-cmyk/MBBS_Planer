@@ -7,6 +7,7 @@ import { summarizeImage } from '@/lib/summarizeImage';
 import { usePdfRenderer } from '@/lib/usePdfRenderer';
 import { saveAttachment, getAttachment, deleteAttachment, base64ToBlob, type NoteAttachment } from '@/lib/noteAttachments';
 import { Card, PageHeader, EmptyState, ErrorBanner, ConfirmDialog } from '@/components/ui';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
 import {
   NotebookPen,
   Plus,
@@ -111,11 +112,13 @@ export default function NotesPage() {
     setSubjectId('');
     setTopicId('');
     setFormError(null);
+    setAttachmentError(null);
     setInputMode('type');
     setFile(null);
     setImagePreview(null);
     setImageBase64(null);
     setSummarizeError(null);
+    setPendingAttachment(null);
     setShowForm(true);
   };
 
@@ -126,11 +129,13 @@ export default function NotesPage() {
     setSubjectId(note.subject_id ?? '');
     setTopicId(note.topic_id ?? '');
     setFormError(null);
+    setAttachmentError(null);
     setInputMode('type');
     setFile(null);
     setImagePreview(null);
     setImageBase64(null);
     setSummarizeError(null);
+    setPendingAttachment(null);
     setShowForm(true);
   };
 
@@ -253,11 +258,11 @@ export default function NotesPage() {
       setNotes(getNotes());
       setShowForm(false);
       setEditingNote(null);
-      setActiveNote(updated);
       setChat([]);
       setChatError(null);
       resetUploadState();
       showToast('Note updated successfully');
+      void selectNote(updated);
     } else {
       const note = saveNote({ ...payload, has_attachment: !!pendingAttachment });
       if (pendingAttachment) {
@@ -271,10 +276,10 @@ export default function NotesPage() {
       }
       setNotes(getNotes());
       setShowForm(false);
-      setActiveNote(note);
       setChat([]);
       setChatError(null);
       resetUploadState();
+      void selectNote(note);
     }
   };
 
@@ -310,6 +315,17 @@ export default function NotesPage() {
       } finally {
         setAttachmentLoading(false);
       }
+    }
+  };
+
+  const handlePdfPageChange = (pageNum: number) => {
+    pdf.changePage(pageNum);
+    if (pdf.pageImage && pendingAttachment) {
+      setPendingAttachment({
+        ...pendingAttachment,
+        pageNumber: pageNum,
+        pageImageBlob: base64ToBlob(pdf.pageImage.base64, 'image/png'),
+      });
     }
   };
 
@@ -490,7 +506,7 @@ export default function NotesPage() {
                               min={1}
                               max={pdf.pageCount}
                               value={pdf.currentPage}
-                              onChange={(e) => pdf.changePage(Math.max(1, Math.min(pdf.pageCount, Number(e.target.value))))}
+                              onChange={(e) => handlePdfPageChange(Math.max(1, Math.min(pdf.pageCount, Number(e.target.value))))}
                               className="w-16 px-2 py-1 rounded-lg border border-slate-200 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 outline-none text-slate-800 text-sm"
                             />
                           </label>
@@ -631,9 +647,7 @@ export default function NotesPage() {
         )}
 
         <Card className="p-5 mb-6">
-          <pre className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed font-sans">
-            {activeNote.content || '(empty note)'}
-          </pre>
+          <MarkdownRenderer content={activeNote.content || '(empty note)'} />
         </Card>
 
         <Card className="p-5">
@@ -674,7 +688,7 @@ export default function NotesPage() {
                         : 'bg-slate-100 text-slate-700 rounded-tl-sm'
                     }`}
                   >
-                    <pre className="whitespace-pre-wrap font-sans">{m.content}</pre>
+                    <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{m.content}</div>
                   </div>
                 </div>
               );

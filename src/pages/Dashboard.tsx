@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getSubjects, getTopics, getPlanEntries, getRemindersDueBy } from '@/lib/db';
+import { getNotes, type LocalNote } from '@/lib/notesStorage';
+import { getDueNoteReviewReminders, estimateNoteReviewMinutes } from '@/lib/noteReviewReminders';
 import type { Subject, Topic, StudyPlanEntry, RevisionReminder } from '@/lib/types';
 import { todayISO, formatDate, relativeDay, daysUntil } from '@/lib/dates';
 import { Card, PageHeader, EmptyState, ProgressBar, Skeleton, ErrorBanner } from '@/components/ui';
@@ -12,6 +14,7 @@ import {
   TrendingUp,
   ArrowRight,
   CalendarDays,
+  NotebookPen,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -25,6 +28,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [todayPlan, setTodayPlan] = useState<StudyPlanEntry[]>([]);
   const [todayReminders, setTodayReminders] = useState<RevisionReminder[]>([]);
+  const [dueNotes, setDueNotes] = useState<LocalNote[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -37,10 +41,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           getPlanEntries(today),
           getRemindersDueBy(today),
         ]);
+        const notes = getNotes();
+        const dueNoteIds = new Set(getDueNoteReviewReminders(today).map((reminder) => reminder.noteId));
         setSubjects(subs);
         setTopics(allTopics);
         setTodayPlan(plan);
         setTodayReminders(reminders);
+        setDueNotes(notes.filter((note) => dueNoteIds.has(note.id)));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data.');
       } finally {
@@ -59,6 +66,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const completed = topics.filter((t) => t.status === 'completed').length;
   const total = topics.length;
   const overallPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+  const estimatedNoteMinutes = dueNotes.reduce(
+    (totalMinutes, note) => totalMinutes + estimateNoteReviewMinutes(note.content),
+    0,
+  );
 
   const statCard = (label: string, value: string | number, icon: typeof CalendarClock, accent: string) => {
     const Icon = icon;
@@ -200,6 +211,50 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 </li>
               ))}
             </ul>
+          )}
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-semibold text-slate-800">Notes due today</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Including overdue reviews</p>
+            </div>
+            <button
+              onClick={() => onNavigate('reminders')}
+              className="text-sm text-sky-600 hover:text-sky-700 flex items-center gap-1"
+            >
+              Review <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-3/4" />
+            </div>
+          ) : dueNotes.length === 0 ? (
+            <EmptyState
+              icon={NotebookPen}
+              title="Nothing due"
+              hint="New notes will appear here when their first review is due."
+            />
+          ) : (
+            <>
+              <p className="text-xl font-bold text-slate-800 mb-3">
+                {dueNotes.length} note{dueNotes.length === 1 ? '' : 's'} due today
+                <span className="text-sm font-medium text-slate-400"> (~{estimatedNoteMinutes} min)</span>
+              </p>
+              <ul className="space-y-2">
+                {dueNotes.slice(0, 4).map((note) => (
+                  <li key={note.id} className="flex items-center gap-3 py-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-teal-50 flex items-center justify-center flex-shrink-0">
+                      <NotebookPen className="w-3.5 h-3.5 text-teal-500" />
+                    </div>
+                    <span className="text-slate-700 truncate">{note.title}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </Card>
 

@@ -6,6 +6,7 @@ import { askAboutNote, type ChatTurn } from '@/lib/askNotes';
 import { summarizeImage } from '@/lib/summarizeImage';
 import { usePdfRenderer } from '@/lib/usePdfRenderer';
 import { saveAttachment, getAttachment, deleteAttachment, base64ToBlob, type NoteAttachment } from '@/lib/noteAttachments';
+import { scheduleNoteReviewReminders, deleteNoteReviewReminders } from '@/lib/noteReviewReminders';
 import { Card, PageHeader, EmptyState, ErrorBanner, ConfirmDialog } from '@/components/ui';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import {
@@ -23,6 +24,7 @@ import {
   FileText,
   Wand2,
   Check,
+  CheckCircle2,
   Paperclip,
 } from 'lucide-react';
 
@@ -265,6 +267,7 @@ export default function NotesPage() {
       void selectNote(updated);
     } else {
       const note = saveNote({ ...payload, has_attachment: !!pendingAttachment });
+      scheduleNoteReviewReminders(note.id);
       if (pendingAttachment) {
         try {
           await saveAttachment(note.id, pendingAttachment);
@@ -283,9 +286,16 @@ export default function NotesPage() {
     }
   };
 
+  const handleMarkReviewed = () => {
+    if (!activeNote) return;
+    scheduleNoteReviewReminders(activeNote.id);
+    showToast('Reviewed — next reminder scheduled');
+  };
+
   const handleDelete = () => {
     if (!confirmDelete) return;
     deleteNote(confirmDelete.id);
+    deleteNoteReviewReminders(confirmDelete.id);
     void deleteAttachment(confirmDelete.id);
     setNotes(getNotes());
     if (activeNote?.id === confirmDelete.id) {
@@ -609,6 +619,14 @@ export default function NotesPage() {
             )}
           </div>
           <div className="flex flex-shrink-0 gap-1">
+            <button
+              onClick={handleMarkReviewed}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-teal-600 bg-teal-50 hover:bg-teal-100 transition"
+              title="Mark as reviewed"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Reviewed</span>
+            </button>
             <button
               onClick={() => openEditForm(activeNote)}
               className="p-2 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition"

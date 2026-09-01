@@ -385,7 +385,7 @@ export default function SubjectsPage() {
         title="Delete subject"
         message={
           <>
-            Delete <strong>{confirmSubject?.name}</strong>? This will permanently remove its topics, plan entries, reminders, and any linked notes. This can't be undone.
+            Delete <strong>{confirmSubject?.name}</strong>? This will permanently remove its topics, plan entries, and reminders. This can't be undone.
           </>
         }
         busy={deleting}
